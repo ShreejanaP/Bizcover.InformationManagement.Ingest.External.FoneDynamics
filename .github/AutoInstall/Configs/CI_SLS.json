@@ -1,0 +1,9 @@
+{
+  "application_version": "1.0",
+  "projects_folder_paths": "./",
+  "pr_branches": "master",
+  "push_branches": "master",
+  "test_script_path": "sls-offline-test.sh",
+  "slack_channel": "null",
+  "slack_on_success": "true"
+}

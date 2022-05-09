@@ -1,0 +1,114 @@
+service: edw-bingads
+custom:
+  role: tf-sls-edw-s3
+  defaultStage: local
+  stages:
+    local:
+      profile: default
+    dev-au:
+      profile: nonprod-edw
+      targetbucket: bc-edw-au-nprd-incoming-bingads
+    dev2-au:
+      profile: nonprod-edw
+    sit-au:
+      profile: nonprod-edw
+    eca-au:
+      profile: nonprod-edw
+    uat-au:
+      profile: nonprod-edw
+      targetbucket: bc-edw-au-nprd-incoming-bingads
+    dev-nz:
+      profile: nonprod-edw
+    dev2-nz:
+      profile: nonprod-edw
+    sit-nz:
+      profile: nonprod-edw
+    uat-nz:
+      profile: nonprod-edw
+    prod-au:
+      profile: production-edw
+      targetbucket: bc-edw-au-prd-incoming-bingads
+    prod-nz:
+      profile: production-edw
+provider:
+  name: aws
+  runtime: python3.8
+  timeout: '900'
+  region: '${self:custom.profiles.${self:provider.profile}.region, "ap-southeast-2"}'
+  stage: '${opt:stage, self:custom.defaultStage}'
+  profile: '${self:custom.stages.${self:provider.stage}.profile}'
+  tags:
+    Author: Serverless
+  stackTags:
+    Author: Serverless
+  tracing:
+    apiGateway: true
+  logs:
+    restApi:
+      roleManagedExternally: true
+  environment:
+    STAGE: '${self:provider.stage}'
+    
+functions:
+  Ingest_External_BingAds_Campaign:    #✍ CHANGE ME
+    name: Ingest_External_BingAds_Campaign
+    handler: src/CampaignsCostAttributionDaily/CampaignsCostAttributionDaily.handler
+    memorySize: 1024
+    timeout: 900    
+    events:
+      - schedule: cron(30 3 * * ? *)       
+      - http:
+          method: GET    #✍ CHANGE ME
+          path: /CampaignsCostAttributionDaily    #✍ CHANGE ME
+          private: true
+    package:
+      exclude:
+        - src/**
+      include:
+        - src/CampaignsCostAttributionDaily/**
+        - common_files       
+    layers:
+      - { Ref: FirstLambdaLayer }
+    environment:
+      targetbucket: ${self:custom.stages.${self:provider.stage}.targetbucket}
+
+  Ingest_External_BingAds_CampaignHistory:    #✍ CHANGE ME
+    name: Ingest_External_BingAds_CampaignHistory
+    handler: src/CampaignsCostAttributionHistory/CampaignsCostAttributionHistory.handler
+    memorySize: 1024
+    timeout: 900    
+    events:     
+      - http:
+          method: GET    #✍ CHANGE ME
+          path: /CampaignsCostAttributionHistory    #✍ CHANGE ME
+          private: true
+    package:
+      exclude:
+        - src/**
+      include:
+        - src/CampaignsCostAttributionHistory/**
+        - common_files       
+    layers:
+      - { Ref: FirstLambdaLayer }
+    environment:
+      targetbucket: ${self:custom.stages.${self:provider.stage}.targetbucket}
+
+
+
+#plugins:
+#  - serverless-offline
+#  - serverless-plugin-aws-alerts
+
+package:
+  individually: true
+  exclude:
+    - layers/**
+    - .venv/**
+    - node_modules/**
+    - requirements.txt
+
+layers:
+  first:
+    package:
+      artifact: layers/bingads.zip
+      

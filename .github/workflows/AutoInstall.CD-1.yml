@@ -1,0 +1,58 @@
+# ---------------------------------------------------------------------------- #
+#           🚫✋ This Workflow is AutoInstalled - Don't edit manually          #
+# ---------------------------------------------------------------------------- #
+name: CD Ready-Issue
+
+on:
+  release:
+    types: 
+      - published
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+jobs:
+  Deployment_Issue:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Get Bizcover Actions
+        uses: actions/checkout@v2
+        with:
+          repository: BizCover/BizCover.DevOps.Actions
+          token: ${{ secrets.GH_TOKEN }}
+          path: bizcover
+      - name: Create_Issue 
+        id: create-issue
+        uses: ./bizcover/actions/create-an-issue-js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Label_Deploy_Ready
+        run: bizcover/scripts/issues/label.sh ${{ steps.create-issue.outputs.number }} "Deployment-Ready" ${{ github.event.release.body }}
+      
+      - name: Label_Issue
+        run: bizcover/scripts/issues/label.sh ${{ steps.create-issue.outputs.number }}
+
+
+      - run: echo "::warning::🌏 Issue URL is ${{  github.event.repository.html_url }}/issues/${{ steps.create-issue.outputs.number }} " 
+
+  Logs:
+    runs-on: bizcover-shared
+    if: ${{ always() }}
+    needs: Deployment_Issue
+    timeout-minutes: 5
+    steps:
+      - name: Get Bizcover Actions
+        uses: actions/checkout@v2
+        with:
+          repository: BizCover/BizCover.DevOps.Actions
+          token: ${{ secrets.GH_TOKEN }}
+          path: bizcover
+
+      - name: Trigger Log Collector
+        run: bizcover/scripts/common/log-collector.sh
+        env:
+          LOG_COLLECTOR_KEY: ${{ secrets.LOG_COLLECTOR_KEY }}

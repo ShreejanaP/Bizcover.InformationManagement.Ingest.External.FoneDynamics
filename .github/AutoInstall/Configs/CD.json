@@ -1,0 +1,15 @@
+{
+  "auto_deploy_labels": "DEPLOY-TO-DEV-AU",
+  "auto_close_issues": "false",
+  "runner_label": "bizcover-sls",
+  "predeploy_script": "bizcover/scripts/deploy/pre-deploy.sh",
+  "init_script": "bizcover/scripts/deploy/sls-deploy.sh",
+  "check_script": "bizcover/scripts/deploy/sls-check.sh",
+  "sit_script_path": "sit.sh",
+  "settings_path": ".deployments",
+  "show_req_body": "false",
+  "slack_channel": "null",
+  "slack_on_success": "true",
+  "slack_namespace": ".*",
+  "platform_type": "sls"
+}

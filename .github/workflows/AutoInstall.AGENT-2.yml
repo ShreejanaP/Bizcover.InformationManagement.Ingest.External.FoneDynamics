@@ -1,0 +1,24 @@
+# ---------------------------------------------------------------------------- #
+#           🚫✋ This Workflow is AutoInstalled - Don't edit manually          #
+# ---------------------------------------------------------------------------- #
+name: AutoInstall_Agent_AutoMerge
+
+on:
+  schedule:
+    - cron: '0 12 * * *'
+#SCHEDULE
+
+jobs:
+  AutoMerge:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - name: automerge
+        uses: "pascalgn/automerge-action@v0.11.0"
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          MERGE_LABELS: "AutoInstall"
+          MERGE_METHOD: "squash"
+          MERGE_RETRIES: "3"
+          MERGE_RETRY_SLEEP: "19000"
+          UPDATE_RETRIES: "0"

@@ -1,0 +1,106 @@
+# ---------------------------------------------------------------------------- #
+#           🚫✋ This Workflow is AutoInstalled - Don't edit manually          #
+# ---------------------------------------------------------------------------- #
+name: CI_SLS_internal-api
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '!.github/workflows/**'
+      - '!.github/AutoInstall/**'
+      - internal-api/**
+  push:
+    branches:
+      - master
+    paths:
+      - '!.github/workflows/**'
+      - '!.github/AutoInstall/**'
+      - internal-api/**
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release Version (default auto-gen)'
+        required: false
+        default: ''
+env:
+  GH_PKGS_TOKEN: ${{ secrets.GH_PKGS_TOKEN }}
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  GH_USER: bizcover-bot@bizcover.com.au
+  SLS_FOLDER_PATH: SLS_FOLDER_PATH_internal-api
+
+jobs:
+  SLS_Offline:
+    runs-on: bizcover-sls
+    timeout-minutes: 10
+    steps:
+      - name: Checkout 
+        uses: actions/checkout@v2
+      - name: Get Bizcover Actions
+        uses: actions/checkout@v2
+        with:
+          repository: BizCover/BizCover.DevOps.Actions
+          token: ${{ secrets.GH_TOKEN }}
+          path: bizcover
+
+      - id: changed_files
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        uses: ./bizcover/actions/get-changed-files
+
+      - name: Config
+        run: CHANGED_FILES="${{ steps.changed_files.outputs.all }}" bizcover/scripts/build/sls-config.sh
+
+      - name: Test offline
+        if: env.NO_DIFF != 'true' 
+        run: bizcover/scripts/build/sls-offline.sh
+
+  Release:
+    runs-on: bizcover-sls
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: SLS_Offline
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v2
+      - name: Get Bizcover Actions
+        uses: actions/checkout@v2
+        with:
+          repository: BizCover/BizCover.DevOps.Actions
+          token: ${{ secrets.GH_TOKEN }}
+          path: bizcover
+
+      - id: changed_files
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        uses: ./bizcover/actions/get-changed-files
+
+      - name: Config
+        run: CHANGED_FILES="${{ steps.changed_files.outputs.all }}" bizcover/scripts/build/sls-config.sh
+
+      - name: Release Tag
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        with:
+          tag_name: "${{ env.VERSION }}"
+          release_name: "Release ${{ env.VERSION }}"
+          body: |
+            ${{ env.SLS_FOLDER_PATH }} 
+            
+
+  Logs:
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: Release
+    timeout-minutes: 5
+    steps:
+      - name: Get Bizcover Actions
+        uses: actions/checkout@v2
+        with:
+          repository: BizCover/BizCover.DevOps.Actions
+          token: ${{ secrets.GH_TOKEN }}
+          path: bizcover
+
+      - name: Trigger Log Collector
+        run: bizcover/scripts/common/log-collector.sh
+        env:
+          LOG_COLLECTOR_KEY: ${{ secrets.LOG_COLLECTOR_KEY }}

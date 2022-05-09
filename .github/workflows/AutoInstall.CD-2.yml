@@ -1,0 +1,131 @@
+# ---------------------------------------------------------------------------- #
+#           🚫✋ This Workflow is AutoInstalled - Don't edit manually          #
+# ---------------------------------------------------------------------------- #
+name: CD Deployment
+
+on:
+  issues:
+    types:
+      - labeled
+
+env:
+  CHECKOUT_RELEASE: "true" 
+  SHOW_REQ_BODY: "false"
+  TF_URL: https://terraform.bizcover.io
+  REGISTRY: 198689915409.dkr.ecr.ap-southeast-2.amazonaws.com
+  SETTINGS_PATH: ".deployments"
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  GH_PKGS_TOKEN: ${{ secrets.GH_PKGS_TOKEN }}
+  GH_USER: bizcover-bot@bizcover.com.au
+  BLAZE_PROVISIONING_NPD_MSSQL_PASS: ${{ secrets.BLAZE_PROVISIONING_NPD_MSSQL_PASS }}
+  BLAZE_PROVISIONING_PRD_MSSQL_PASS: ${{ secrets.BLAZE_PROVISIONING_PRD_MSSQL_PASS }}
+  SLACK_OP_TOKEN: ${{ secrets.SLACK_OP_TOKEN }}
+  SLACK_OP_CHANNEL: "deployments"
+  APP_METADATA_TOKEN: ${{ secrets.APP_METADATA_TOKEN }}
+
+jobs:
+  Deploy:
+    timeout-minutes: 10
+    if: startsWith(github.event.label.name, 'DEPLOY-TO-')
+    runs-on: bizcover-sls
+    
+    steps:
+      - name: Comment address on the issue
+        run: |
+          ISSUE_NUMBER=`jq -r ".issue.number" $GITHUB_EVENT_PATH`
+          curl -s -H "Authorization: token $GH_TOKEN" -H "Content-Type: application/json" --request POST --data "{\"body\":\"[`jq -r ".label.name" $GITHUB_EVENT_PATH` started here ▶ ](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)\"}" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments" > /dev/null
+            
+      - name: Get Release tag
+        run: |
+          RELEASE_TAG=`echo ${{ github.event.issue.title }} | sed "s/^Deployment-//" `
+          echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+      
+      - name: Checkout on Release tag
+        if: ${{ env.CHECKOUT_RELEASE == 'true' }} 
+        uses: actions/checkout@v2
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }} 
+
+      - name: Get Deployment Scripts
+        uses: actions/checkout@v2
+        with:
+          repository: BizCover/BizCover.DevOps.Actions
+          token: ${{ secrets.GH_TOKEN }}
+          path: bizcover
+
+      - name: Prepare Deployment 
+        run: bizcover/scripts/deploy/prepare.sh
+
+      - name: Pre Deployment Script
+        run: bizcover/scripts/deploy/pre-deploy.sh
+
+      - name: Initialize Deployment
+        run: bizcover/scripts/deploy/sls-deploy.sh
+
+      - name: Check Deployment
+        run: bizcover/scripts/deploy/sls-check.sh
+
+      - name: System Integration Test
+        if: startsWith(github.event.label.name, 'DEPLOY-TO-SIT')
+        run: bizcover/scripts/deploy/sit.sh
+
+      - name: Queue waiting for README ⏳ 
+        uses: ./bizcover/actions/queue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Readme
+        run: bizcover/scripts/deploy/deployments-readme.sh
+
+
+      - name: Cleanup 
+        if: ${{ always() }}
+        run: |
+          rm -f /tmp/${{ github.run_id }}.body
+          unset TF_URL PROJECT REGISTRY IMAGE TAG COUNTRY NAMESPACE LIVE_PATH SETTINGS_PATH APPSETTINGS ENVIRONMENT_VARIABLES RELEASE_TAG
+
+      - name: Slack_OP_Update_Success 
+        run: set +e; SLACK_OP_UPDATE=`echo $SLACK_RES | jq ". | fromjson "` SLACK_OP_COLOR="#3BAD10" SLACK_OP_TEXT="✔🚀 Deployment Succeeded" bizcover/scripts/common/slack-operations-update.sh
+
+      - name: Slack_OP_Update_Failure 
+        if: ${{ failure() }}
+        run: set +e; SLACK_OP_UPDATE=`echo $SLACK_RES | jq ". | fromjson "` SLACK_OP_COLOR="#F00000" SLACK_OP_TEXT="❌🚀 Deployment Failed" bizcover/scripts/common/slack-operations-update.sh
+
+  Approve:
+    if: startsWith(github.event.label.name, 'APPROVE-')
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Get Release tag
+        run: |
+          RELEASE_TAG=`echo ${{ github.event.issue.title }} | sed "s/^Deployment-//" `
+          echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+
+      - name: Get Deployment Scripts
+        uses: actions/checkout@v2
+        with:
+          repository: BizCover/BizCover.DevOps.Actions
+          token: ${{ secrets.GH_TOKEN }}
+          path: bizcover
+
+      - name: Approve the Release
+        run: bizcover/scripts/deploy/approve.sh
+
+  Logs:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [Deploy, Approve]
+    timeout-minutes: 5
+    steps:
+      - name: Get Bizcover Actions
+        uses: actions/checkout@v2
+        with:
+          repository: BizCover/BizCover.DevOps.Actions
+          token: ${{ secrets.GH_TOKEN }}
+          path: bizcover
+
+      - name: Trigger Log Collector
+        run: bizcover/scripts/common/log-collector.sh
+        env:
+          LOG_COLLECTOR_KEY: ${{ secrets.LOG_COLLECTOR_KEY }}

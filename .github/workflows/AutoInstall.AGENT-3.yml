@@ -1,0 +1,19 @@
+# ---------------------------------------------------------------------------- #
+#           🚫✋ This Workflow is AutoInstalled - Don't edit manually          #
+# ---------------------------------------------------------------------------- #
+name: AutoInstall_Dependabot_Approve
+
+on:
+  pull_request:
+    branches: 
+      - master
+
+jobs:
+  auto-approve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: hmarr/auto-approve-action@v2.0.0
+      if: github.actor == 'dependabot[bot]' || github.actor == 'dependabot-preview[bot]' || github.actor == 'bizcover-bot'
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"

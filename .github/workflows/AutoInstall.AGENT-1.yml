@@ -1,0 +1,50 @@
+# ---------------------------------------------------------------------------- #
+#           🚫✋ This Workflow is AutoInstalled - Don't edit manually          #
+# ---------------------------------------------------------------------------- #
+name: AutoInstall_Agent
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/AutoInstall/Configs/**"
+  workflow_dispatch:
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+jobs:
+  Refresh:
+    runs-on: bizcover-shared
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout 
+        uses: actions/checkout@v2
+      - name: Get Bizcover Actions
+        uses: actions/checkout@v2
+        with:
+          repository: BizCover/BizCover.DevOps.Actions
+          token: ${{ secrets.GH_TOKEN }}
+          path: bizcover
+      - name: Call Base
+        run: bizcover/scripts/agent/callback.sh
+
+  Logs:
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: Refresh
+    timeout-minutes: 5
+    steps:
+      - name: Get Bizcover Actions
+        uses: actions/checkout@v2
+        with:
+          repository: BizCover/BizCover.DevOps.Actions
+          token: ${{ secrets.GH_TOKEN }}
+          path: bizcover
+
+      - name: Trigger Log Collector
+        run: bizcover/scripts/common/log-collector.sh
+        env:
+          LOG_COLLECTOR_KEY: ${{ secrets.LOG_COLLECTOR_KEY }}
